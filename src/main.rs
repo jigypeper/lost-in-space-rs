@@ -18,10 +18,12 @@ fn main() -> ! {
      * examples available.
      */
 
-    let mut led = pins.d13.into_output();
+    let mut cabin_lights = pins.d12.into_output();
 
     loop {
-        led.toggle();
+        cabin_lights.set_high();
         arduino_hal::delay_ms(1000);
+        cabin_lights.set_low();
+        arduino_hal::delay_ms(100);
     }
 }
