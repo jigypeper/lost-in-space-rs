@@ -11,6 +11,10 @@ Rust project for the _Arduino Uno_.
 3. Run `cargo run` to flash the firmware to a connected board.  If `ravedude`
    fails to detect your board, check its documentation at
    <https://crates.io/crates/ravedude>.
+  note: will need to export an env variable, this can find board info with `lsusb` e.g.
+  ```bash
+    export export RAVEDUDE_PORT=/dev/ttyUSB0
+  ```
 
 4. `ravedude` will open a console session after flashing where you can interact
    with the UART console of your board.
