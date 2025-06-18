@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use embedded_hal::digital::{InputPin, OutputPin, StatefulOutputPin};
 use panic_halt as _;
 
 #[arduino_hal::entry]
@@ -19,11 +20,13 @@ fn main() -> ! {
      */
 
     let mut cabin_lights = pins.d12.into_output();
+    let cabin_lights_switch = pins.d2.into_pull_up_input();
 
     loop {
-        cabin_lights.set_high();
-        arduino_hal::delay_ms(1000);
-        cabin_lights.set_low();
-        arduino_hal::delay_ms(100);
+        if cabin_lights_switch.is_high() {
+            cabin_lights.set_high();
+        } else {
+            cabin_lights.set_low();
+        }
     }
 }
