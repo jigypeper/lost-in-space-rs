@@ -19,14 +19,31 @@ fn main() -> ! {
      * examples available.
      */
 
-    let mut cabin_lights = pins.d12.into_output();
-    let cabin_lights_switch = pins.d2.into_pull_up_input();
+    let mut green_led = pins.d10.into_output();
+    let mut blue_led = pins.d11.into_output();
+    let mut red_led = pins.d12.into_output();
+    let cabin_lights_green_switch = pins.d2.into_pull_up_input();
+    let cabin_lights_blue_switch = pins.d3.into_pull_up_input();
+    let cabin_lights_red_switch = pins.d4.into_pull_up_input();
 
     loop {
-        if cabin_lights_switch.is_high() {
-            cabin_lights.set_high();
+        
+        if cabin_lights_green_switch.is_high() {
+            green_led.set_high();
         } else {
-            cabin_lights.set_low();
+            green_led.set_low();
+        }
+
+        if cabin_lights_blue_switch.is_high() {
+            blue_led.set_high();
+        } else {
+            blue_led.set_low();
+        }
+        
+        if cabin_lights_red_switch.is_high() {
+            red_led.set_high();
+        } else {
+            red_led.set_low();
         }
     }
 }
