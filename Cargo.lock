@@ -114,11 +114,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "723dce4e9f25b6e6c5f35628e144794e5b459216ed7da97b7c4b66cdb3fa82ca"
 
 [[package]]
+name = "keypad"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6cd098757f3c79a71672ea320a457ba57ab42f25f628145473329fa59c320d37"
+dependencies = [
+ "embedded-hal 0.2.7",
+]
+
+[[package]]
 name = "lost-in-space-rs"
 version = "0.1.0"
 dependencies = [
  "arduino-hal",
  "embedded-hal 1.0.0",
+ "keypad",
  "nb 1.1.0",
  "panic-halt",
  "ufmt",
