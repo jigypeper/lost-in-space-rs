@@ -14,15 +14,81 @@ impl UserPin {
         UserPin { pin: ['0', '0', '0', '0'], pin_set: false }
     }
 
-    fn set_pin(&mut self, pin: [char; 4]) -> Self {
-        todo!();
+    fn set_pin(&mut self, pin: [char; 4]) {
+        self.pin = pin;
+        self.pin_set = true;
     }
     
     fn validate_pin(&self, pin: [char; 4]) -> bool {
-        todo!();
+        self.pin[0] == pin[0] && 
+        self.pin[1] == pin[1] && 
+        self.pin[2] == pin[2] && 
+        self.pin[3] == pin[3]
+    }
+    
+    fn get_pin(&self) -> [char; 4] {
+        self.pin
     }
 }
 
+fn play_sound<T>(current_freq: u16, buzzer: &mut T)
+where
+T: OutputPin
+{
+    let period_us = 1_000_000 / current_freq as u32;
+    let half_period_us = period_us / 2;
+
+    buzzer.set_high().unwrap();
+    arduino_hal::delay_us(half_period_us);
+    buzzer.set_low().unwrap();
+    arduino_hal::delay_us(half_period_us);
+}
+
+fn play_success_sound<T>(buzzer: &mut T)
+where
+T: OutputPin
+{
+    // Play ascending tones for success
+    let success_tones = [523, 659, 784]; 
+    for freq in success_tones.iter() {
+        let period_us = 1_000_000 / freq;
+        let half_period_us = period_us / 2;
+        let cycles = (300 * 1000) / period_us; 
+        
+        for _ in 0..cycles {
+            buzzer.set_high().unwrap();
+            arduino_hal::delay_us(half_period_us);
+            buzzer.set_low().unwrap();
+            arduino_hal::delay_us(half_period_us);
+        }
+        arduino_hal::delay_ms(50); 
+    }
+}
+
+fn play_error_sound<T>(buzzer: &mut T)
+where
+T: OutputPin
+{
+    // Play low frequency error beeps for 2 seconds
+    let error_freq = 200; // Low frequency for error
+    let period_us = 1_000_000 / error_freq;
+    let half_period_us = period_us / 2;
+    
+    // Play for 2 seconds with beep pattern
+    for _ in 0..4 {
+        // 400ms beep
+        let cycles = (400 * 1000) / period_us;
+        for _ in 0..cycles {
+            buzzer.set_high().unwrap();
+            arduino_hal::delay_us(half_period_us);
+            buzzer.set_low().unwrap();
+            arduino_hal::delay_us(half_period_us);
+        }
+        // 100ms silence
+        buzzer.set_low().unwrap();
+        arduino_hal::delay_ms(100);
+    }
+}
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -31,7 +97,12 @@ fn main() -> ! {
     let mut serial = arduino_hal::default_serial!(dp, pins, 57600);
     let mut buzzer = pins.d10.into_output();
     let mut user = UserPin::default();
-    let mut pin: [char; 4] = ['*', '*', '*', '*'];
+    let mut current_pin: [char; 4] = ['*', '*', '*', '*'];
+    let mut pin_position = 0usize;
+    let mut setting_pin = true;
+    
+    ufmt::uwriteln!(&mut serial, "Pin Entry System Started").unwrap();
+    ufmt::uwriteln!(&mut serial, "Please set your 4-digit pin using 0-9 keys").unwrap();
     
     // Configure keypad pins - rows as input with pullup, columns as output
     let row_pins = [
@@ -60,14 +131,6 @@ fn main() -> ! {
         ['*', '0', '#', 'D'],
     ];
 
-    let tones = [
-      // a frequency tone for each button
-      [ 31, 93, 147, 208 ],
-      [ 247, 311, 370, 440 ],
-      [ 523, 587, 698, 880 ],
-      [ 1397, 2637, 3729, 0 ],  // Use frequency of 0 for bottom right key to end tone.
-    ];
-
     loop {
         for col_idx in 0..4 {
             // Set current column low, others high
@@ -83,10 +146,65 @@ fn main() -> ! {
             
             for (row_idx, row_pin) in row_pins.iter().enumerate() {
                 if row_pin.is_low() {
-                    // TODO: logic for changing and validating pin goes here
                     let pressed_char = key_chars[row_idx][col_idx];
-                    let sound = tones[row_idx][col_idx];
                     ufmt::uwriteln!(&mut serial, "Key pressed: {}", pressed_char).unwrap();
+                    
+                    // Handle digit input (0-9)
+                    if pressed_char >= '0' && pressed_char <= '9' && pin_position < 4 {
+                        current_pin[pin_position] = pressed_char;
+                        pin_position += 1;
+                        ufmt::uwriteln!(&mut serial, "Pin position {}: {}", pin_position, pressed_char).unwrap();
+                        
+                        if pin_position == 4 {
+                            if setting_pin {
+                                // Save the pin
+                                user.set_pin(current_pin);
+                                setting_pin = false;
+                                ufmt::uwriteln!(&mut serial, "Pin set successfully! Press # to enter pin.").unwrap();
+                                // Reset after setting pin
+                                current_pin = ['*', '*', '*', '*'];
+                                pin_position = 0;
+                            } else {
+                                // Validate the pin
+                                let stored_pin = user.get_pin();
+                                ufmt::uwriteln!(&mut serial, "Stored pin: {}{}{}{}", stored_pin[0], stored_pin[1], stored_pin[2], stored_pin[3]).unwrap();
+                                ufmt::uwriteln!(&mut serial, "Entered pin: {}{}{}{}", current_pin[0], current_pin[1], current_pin[2], current_pin[3]).unwrap();
+                                
+                                if user.validate_pin(current_pin) {
+                                    ufmt::uwriteln!(&mut serial, "Access granted!").unwrap();
+                                    play_success_sound(&mut buzzer);
+                                    // Reset after successful access
+                                    current_pin = ['*', '*', '*', '*'];
+                                    pin_position = 0;
+                                } else {
+                                    ufmt::uwriteln!(&mut serial, "Access denied! Press * to try again.").unwrap();
+                                    play_error_sound(&mut buzzer);
+                                    // Don't reset - let user press * to reset
+                                }
+                            }
+                        }
+                    }
+                    // Handle # key - start pin entry mode
+                    else if pressed_char == '#' && user.pin_set && !setting_pin {
+                        ufmt::uwriteln!(&mut serial, "Enter pin code:").unwrap();
+                        current_pin = ['*', '*', '*', '*'];
+                        pin_position = 0;
+                    }
+                    // Handle * key - reset current entry
+                    else if pressed_char == '*' {
+                        ufmt::uwriteln!(&mut serial, "Entry cleared").unwrap();
+                        current_pin = ['*', '*', '*', '*'];
+                        pin_position = 0;
+                        // Don't change setting_pin state - keep current mode
+                    }
+                    // Handle C key - change pin
+                    else if pressed_char == 'C' {
+                        ufmt::uwriteln!(&mut serial, "Entry cleared").unwrap();
+                        current_pin = ['*', '*', '*', '*'];
+                        pin_position = 0;
+                        setting_pin = true;
+                    }
+                    
                     arduino_hal::delay_ms(200);
                 }
             }
